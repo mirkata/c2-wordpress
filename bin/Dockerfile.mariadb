@@ -1,0 +1,4 @@
+FROM mariadb:${MARIADB_VERSION:-latest}
+
+Run (mysql -u root -padmin -e "CREATE DATABASE IF NOT EXIST c2_wp; ALTER DATABASE c2_wp CHARACTER SET utf8 COLLATE utf8_general_ci;")
+

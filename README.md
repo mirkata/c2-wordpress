@@ -26,3 +26,4 @@ Docker automates application deployment in portable containers containing all ne
 
 - **Can I migrate an existing WordPress site to Docker?**  
   Yes, migration is possible and beneficial despite potential extra steps.
+
