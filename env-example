@@ -1,0 +1,22 @@
+# wordpress - wordpress:6.7.2-php8.2-fpm
+WORDPRESS_VERSION=6.7.2-php8.2-fpm
+WORDPRESS_DB_NAME=c2db
+WORDPRESS_TABLE_PREFIX=c2_
+WORDPRESS_DB_HOST=mysql
+WORDPRESS_DB_USER=superuser
+WORDPRESS_DB_PASSWORD=superpassword
+
+# mariadb - mariadb:latest
+MARIADB_VERSION=latest
+MYSQL_ROOT_PASSWORD=admin
+MYSQL_USER=superuser
+MYSQL_PASSWORD=superpassword
+MYSQL_DATABASE=c2db
+
+# nginx - nginx:latest
+NGINX_VERSION=latest
+
+# volumes on host
+NGINX_CONF_DIR=./nginx
+NGINX_LOG_DIR=./logs/nginx
+WORDPRESS_DATA_DIR=./wordpress

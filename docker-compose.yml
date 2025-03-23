@@ -1,8 +1,7 @@
-version: '3.6'
 services:
 
   wordpress:
-    image: wordpress:{WORDPRESS_VERSION}
+    image: wordpress:${WORDPRESS_VERSION}
     container_name: wordpress
     build:
       context: .
@@ -73,14 +72,3 @@ services:
     volumes:
       - ./qdrant_storage:/qdrant/storage
 
-  qdrant-web-ui:
-    image: qdrant/qdrant-console:latest
-    container_name: qdrant-web-ui
-    restart: always
-    ports:
-      - "8080:8080"  # Web UI
-    environment:
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-    depends_on:
-      - qdrant
