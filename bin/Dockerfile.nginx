@@ -1,0 +1,21 @@
+ARG NGINX_VERSION=latest
+FROM nginx:${NGINX_VERSION}
+
+# Install logrotate. No cron daemon needed — the entrypoint runs logrotate
+# on an hourly sleep loop in the background, which is more reliable in
+# containers than system cron (avoids PID namespace and /run permission issues).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends logrotate curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install the logrotate config. Log files live at /var/log/nginx/ inside the
+# container (bind-mounted from ./logs/nginx on the host).
+COPY config/logrotate.nginx /etc/logrotate.d/c2-nginx
+RUN chmod 644 /etc/logrotate.d/c2-nginx
+
+# Custom entrypoint: starts the logrotate loop then hands off to nginx.
+COPY bin/nginx-entrypoint.sh /nginx-entrypoint.sh
+RUN chmod +x /nginx-entrypoint.sh
+
+ENTRYPOINT ["/nginx-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

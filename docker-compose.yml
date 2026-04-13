@@ -1,74 +1,201 @@
+networks:
+  c2net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
+  qdrant_storage:
+
+# ── Docker profiles ──────────────────────────────────────────────────────────
+# Services without a profile are always started.
+# Optional services are gated behind named profiles:
+#
+#   tools  — adminer (DB admin UI). Use in dev/staging only.
+#   ai     — qdrant  (vector DB).   Use when AI/search features are enabled.
+#
+# Usage:
+#   ./start.sh              → core stack only  (mysql, wordpress, nginx, redis)
+#   ./start.sh --tools      → + adminer
+#   ./start.sh --ai         → + qdrant
+#   ./start.sh --tools --ai → full stack
+
 services:
 
+  mysql:
+    build:
+      context: .
+      dockerfile: bin/Dockerfile.mariadb
+      args:
+        MARIADB_VERSION: ${MARIADB_VERSION}
+    image: c2-mariadb:${MARIADB_VERSION}
+    container_name: mysql
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./config/mariadb.cnf:/etc/mysql/conf.d/mariadb.cnf:ro
+      - ./logs/mysql:/var/log/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+    restart: unless-stopped
+    networks:
+      - c2net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   wordpress:
-    image: wordpress:${WORDPRESS_VERSION}
-    container_name: wordpress
     build:
       context: .
       dockerfile: bin/Dockerfile.wordpress
+      args:
+        WORDPRESS_VERSION: ${WORDPRESS_VERSION}
+    image: c2-wordpress:${WORDPRESS_VERSION}
+    container_name: wordpress
     volumes:
       - ./config/php.conf.ini:/usr/local/etc/php/conf.d/conf.ini
+      - ./config/php-fpm.conf:/usr/local/etc/php-fpm.d/zz-override.conf
       - ./wordpress:/var/www/html
+    entrypoint: ["/usr/local/bin/wordpress-entrypoint.sh"]
+    command: ["php-fpm"]
     environment:
-      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME}
+      - WORDPRESS_DB_NAME=${DB_NAME}
       - WORDPRESS_TABLE_PREFIX=${WORDPRESS_TABLE_PREFIX}
-      - WORDPRESS_DB_HOST=${WORDPRESS_DB_HOST}
-      - WORDPRESS_DB_USER=${WORDPRESS_DB_USER}
-      - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASSWORD}
-    restart: always
-
-  mysql:
-    image: mariadb:${MARIADB_VERSION}
-    container_name: mysql
-    volumes:
-      - ./mysql:/var/lib/mysql
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-    restart: always
+      - WORDPRESS_DB_HOST=mysql
+      - WORDPRESS_DB_USER=${DB_USER}
+      - WORDPRESS_DB_PASSWORD=${DB_PASSWORD}
+      - WORDPRESS_CONFIG_EXTRA=
+          defined('WP_HOME')              || define('WP_HOME',              '${WORDPRESS_SCHEME}://${WORDPRESS_DOMAIN}');
+          defined('WP_SITEURL')           || define('WP_SITEURL',           '${WORDPRESS_SCHEME}://${WORDPRESS_DOMAIN}');
+          defined('WP_REDIS_HOST')        || define('WP_REDIS_HOST',        'redis');
+          defined('WP_REDIS_PORT')        || define('WP_REDIS_PORT',        6379);
+          defined('WP_REDIS_PASSWORD')    || define('WP_REDIS_PASSWORD',    '${REDIS_PASSWORD}');
+          defined('WP_REDIS_DATABASE')    || define('WP_REDIS_DATABASE',    0);
+          defined('WP_REDIS_TIMEOUT')     || define('WP_REDIS_TIMEOUT',     1);
+          defined('WP_REDIS_READ_TIMEOUT')|| define('WP_REDIS_READ_TIMEOUT',1);
+          defined('WP_REDIS_MAXTTL')      || define('WP_REDIS_MAXTTL',      86400);
+          defined('WP_CACHE')             || define('WP_CACHE',             true);
+          defined('WP_DEBUG')             || define('WP_DEBUG',             false);
+          defined('WP_DEBUG_DISPLAY')     || define('WP_DEBUG_DISPLAY',     false);
+          defined('WP_DEBUG_LOG')         || define('WP_DEBUG_LOG',         false);
+          defined('SCRIPT_DEBUG')         || define('SCRIPT_DEBUG',         false);
+          defined('SAVEQUERIES')          || define('SAVEQUERIES',          false);
+          defined('AS3CF_SETTINGS')       || define('AS3CF_SETTINGS', serialize(array('provider' => 'aws', 'use-server-roles' => true)));
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - c2net
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   nginx:
-    image: nginx:${NGINX_VERSION}
+    build:
+      context: .
+      dockerfile: bin/Dockerfile.nginx
+      args:
+        NGINX_VERSION: ${NGINX_VERSION}
+    image: c2-nginx:${NGINX_VERSION}
     container_name: nginx
     ports:
       - '80:80'
-      - '443:443'
     volumes:
       - ${NGINX_CONF_DIR:-./nginx}:/etc/nginx/conf.d
       - ${NGINX_LOG_DIR:-./logs/nginx}:/var/log/nginx
       - ${WORDPRESS_DATA_DIR:-./wordpress}:/var/www/html
     depends_on:
-      - wordpress
-    restart: always
+      wordpress:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - c2net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:${REDIS_VERSION:-7-alpine}
+    container_name: redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - c2net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   adminer:
+    profiles: [tools]
     image: adminer
-    restart: always
-    links:
-      - mysql
+    container_name: adminer
+    restart: unless-stopped
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     ports:
-      - 8080:8080
-      
-  redis:
-    image: redis:latest
-    restart: always
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./redis_data:/data    
+      - "127.0.0.1:8080:8080"
+    networks:
+      - c2net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   qdrant:
-    image: qdrant/qdrant:latest
+    profiles: [ai]
+    image: qdrant/qdrant:${QDRANT_VERSION:-latest}
     container_name: qdrant
-    restart: always
+    restart: unless-stopped
     ports:
-      - "6333:6333"  # REST API
-      - "6334:6334"  # gRPC
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
-      - ./qdrant_storage:/qdrant/storage
-
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - c2net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,27 @@
+# MariaDB log rotation — runs inside the mysql container.
+#
+# Installed to /etc/logrotate.d/c2-mariadb by bin/Dockerfile.mariadb.
+# Triggered hourly by the sleep loop in bin/mariadb-entrypoint.sh.
+#
+# Rotates error.log and slow.log when they reach 10 MB.
+# Keeps the last 3 rotated files; older files are deleted automatically.
+# Binary logs (/var/lib/mysql/mysql-bin.*) are NOT rotated here —
+# MariaDB manages them internally via max_binlog_size and binlog_expire_logs_seconds.
+#
+# postrotate calls mysqladmin directly — no docker exec needed from inside
+# the container. $MYSQL_ROOT_PASSWORD is set in the container environment.
+
+/var/log/mysql/*.log {
+    size    10M
+    rotate  3
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    dateformat -%Y%m%d
+    sharedscripts
+    postrotate
+        mysqladmin -u root -p"$MYSQL_ROOT_PASSWORD" flush-error-log flush-slow-log 2>/dev/null || true
+    endscript
+}

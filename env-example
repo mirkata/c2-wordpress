@@ -1,22 +1,30 @@
-# wordpress - wordpress:6.7.2-php8.2-fpm
-WORDPRESS_VERSION=6.7.2-php8.2-fpm
-WORDPRESS_DB_NAME=c2db
-WORDPRESS_TABLE_PREFIX=c2_
-WORDPRESS_DB_HOST=mysql
-WORDPRESS_DB_USER=superuser
-WORDPRESS_DB_PASSWORD=superpassword
+# c2-wordpress - Production Environment Configuration
+# Copy to .env and fill in values
 
-# mariadb - mariadb:latest
-MARIADB_VERSION=latest
+# ── Core versions (pin these for production) ─────────────────────────────────
+WORDPRESS_VERSION=6.9.4-php8.3-fpm
+MARIADB_VERSION=11.6.2
+NGINX_VERSION=1.27.4
+REDIS_VERSION=7-alpine
+QDRANT_VERSION=v1.19.0
+
+# ── Domain & scheme ──────────────────────────────────────────────────────────
+WORDPRESS_DOMAIN=localhost
+WORDPRESS_SCHEME=http
+
+# ── Database (single source of truth — used by both MariaDB and WordPress) ───
+DB_NAME=afdb
+DB_USER=superuser
+DB_PASSWORD=superpassword
+WORDPRESS_TABLE_PREFIX=af_
+
+# ── MariaDB root password (separate from DB_USER) ───────────────────────────
 MYSQL_ROOT_PASSWORD=admin
-MYSQL_USER=superuser
-MYSQL_PASSWORD=superpassword
-MYSQL_DATABASE=c2db
 
-# nginx - nginx:latest
-NGINX_VERSION=latest
+# ── Redis password ───────────────────────────────────────────────────────────
+REDIS_PASSWORD=superpassword
 
-# volumes on host
+# ── Host paths ───────────────────────────────────────────────────────────────
 NGINX_CONF_DIR=./nginx
 NGINX_LOG_DIR=./logs/nginx
 WORDPRESS_DATA_DIR=./wordpress

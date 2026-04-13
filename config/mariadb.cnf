@@ -1,0 +1,53 @@
+# MariaDB configuration for c2-wordpress Docker stack
+#
+# Mounted read-only into the mysql container at:
+#   /etc/mysql/conf.d/mariadb.cnf
+#
+# The bind-mount ./logs/mysql → /var/log/mysql must exist and be owned by
+# the mysql user (uid resolved dynamically) before starting the stack.
+# start.sh handles this automatically.
+
+[mysqld]
+
+# ── Error log ────────────────────────────────────────────────────────────────
+# Captures errors, warnings, and startup/shutdown messages.
+log_error = /var/log/mysql/error.log
+
+# ── Slow query log ───────────────────────────────────────────────────────────
+# Records queries that exceed long_query_time seconds.
+# Useful for identifying unoptimised queries in WordPress / HRIS workloads.
+slow_query_log                = 1
+slow_query_log_file           = /var/log/mysql/slow.log
+long_query_time               = 2
+log_queries_not_using_indexes = 0
+
+# ── Binary log ───────────────────────────────────────────────────────────────
+# Written to the mysql_data named volume (/var/lib/mysql/mysql-bin.*).
+# MariaDB manages rotation and purge internally — do NOT use logrotate for these.
+# Rotate: each binary log file is capped at max_binlog_size.
+# Purge:  files older than binlog_expire_logs_seconds (7 days) are deleted automatically.
+# For MariaDB < 10.6 use: expire_logs_days = 7
+log_bin                    = /var/lib/mysql/mysql-bin
+max_binlog_size            = 10M
+binlog_expire_logs_seconds = 604800
+binlog_format              = ROW
+
+# ── InnoDB redo log ──────────────────────────────────────────────────────────
+# MariaDB 10.6+ uses a CIRCULAR redo log — fixed-size files in the data dir.
+# MariaDB 12.x removed innodb_log_files_in_group (it was always 2 anyway).
+#
+# How it works:
+#   • MariaDB writes sequentially and wraps; old data is overwritten once
+#     InnoDB flushes dirty pages to disk (checkpoint).
+#   • The files are NEVER deleted and NEVER grow beyond innodb_log_file_size.
+#   • logrotate does NOT apply here.
+#
+# ⚠ Changing innodb_log_file_size requires a clean shutdown, manual deletion
+#   of ib_logfile* from /var/lib/mysql, then restart.
+innodb_log_file_size = 256M
+
+# ── General query log (disabled — too verbose for production) ────────────────
+# Logs every single SQL statement. Enable temporarily for debugging only.
+# To enable: uncomment general_log and general_log_file, then restart mysql.
+general_log = 0
+# general_log_file = /var/log/mysql/general.log

@@ -1,3 +1,40 @@
-FROM wordpress:6.6.2-php8.1-fpm
+ARG WORDPRESS_VERSION=6.9.4-php8.3-fpm
+FROM wordpress:${WORDPRESS_VERSION} AS base
 
+FROM base AS extensions
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        libzip-dev \
+        curl \
+    ; \
+    rm -rf /var/lib/apt/lists/*; \
+    pecl install redis; \
+    docker-php-ext-enable redis; \
+    docker-php-ext-install calendar; \
+    rm -rf /tmp/pear /tmp/pear-cache; \
+    apt-get clean
 
+FROM base
+COPY --from=extensions /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=extensions /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+COPY --from=extensions /usr/local/bin/ /usr/local/bin/
+
+COPY <<EOF /usr/local/bin/php-fpm-healthcheck
+#!/bin/sh
+kill -0 1 2>/dev/null
+EOF
+RUN chmod +x /usr/local/bin/php-fpm-healthcheck
+
+COPY mu-plugins/*.php /usr/src/wordpress/wp-content/mu-plugins/
+
+COPY <<EOF /usr/local/bin/php-fpm-healthcheck
+#!/bin/sh
+kill -0 1 2>/dev/null
+EOF
+RUN chmod +x /usr/local/bin/php-fpm-healthcheck
+
+COPY bin/wordpress-entrypoint.sh /usr/local/bin/wordpress-entrypoint.sh
+RUN chmod +x /usr/local/bin/wordpress-entrypoint.sh
+
+ENTRYPOINT ["wordpress-entrypoint.sh"]

@@ -1,4 +1,21 @@
-FROM mariadb:${MARIADB_VERSION:-latest}
+ARG MARIADB_VERSION=latest
+FROM mariadb:${MARIADB_VERSION}
 
-Run (mysql -u root -padmin -e "CREATE DATABASE IF NOT EXIST c2_wp; ALTER DATABASE c2_wp CHARACTER SET utf8 COLLATE utf8_general_ci;")
+# Install logrotate. No cron daemon needed — the entrypoint runs logrotate
+# on an hourly sleep loop in the background, identical to the nginx approach.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends logrotate \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install the logrotate config. Log files live at /var/log/mysql/ inside the
+# container (bind-mounted from ./logs/mysql on the host).
+COPY config/logrotate.mariadb /etc/logrotate.d/c2-mariadb
+RUN chmod 644 /etc/logrotate.d/c2-mariadb
+
+# Custom entrypoint: starts the logrotate loop then hands off to the official
+# MariaDB entrypoint, which handles DB initialisation, users, and startup.
+COPY bin/mariadb-entrypoint.sh /mariadb-entrypoint.sh
+RUN chmod +x /mariadb-entrypoint.sh
+
+ENTRYPOINT ["/mariadb-entrypoint.sh"]
+CMD ["mariadbd"]

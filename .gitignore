@@ -22,3 +22,20 @@ rad.json
 TestResults.xml
 #Ignore .env files
 .env
+#Ignore wordpress directories and files
+wordpress/
+
+# SSL certificates — never commit private keys
+certs/privkey.pem
+certs/fullchain.pem
+certs/*.pem
+certs/*.crt
+certs/*.key
+
+# Log files — ignore content, not the directories themselves
+logs/nginx/*.log
+logs/nginx/*.log-*
+logs/nginx/*.log.gz
+logs/mysql/*.log
+logs/mysql/*.log-*
+logs/mysql/*.log.gz
