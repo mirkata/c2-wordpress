@@ -11,6 +11,8 @@
 ./start.sh --tools      # + Adminer (DB admin UI)
 ./start.sh --ai         # + Qdrant (vector DB)
 ./start.sh --all        # Everything
+./start.sh --dry-run    # Preview actions without executing
+./start.sh --force      # Skip ownership checks if directories are already owned correctly
 
 ./stop.sh               # Stop, keep data
 ./stop.sh --wipe        # Stop + delete all data
